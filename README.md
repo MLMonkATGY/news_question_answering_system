@@ -81,9 +81,18 @@
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
-There are many great README templates available on GitHub; however, I didn't find one that really suited my needs so I created this enhanced one. I want to create a README template so amazing that it'll be the last one you ever need -- I think this is it.
+The motiovation for this project is to create an end-to-end machine learning pipeline to create a custom news question answering system.
 
-Here's why:
+This project consists of 3 different pipeline
+
+1. Data scraping pipeline -
+   a. Create machine learning dataset for training and testing
+   b. Interval Scraping to update news database
+2. Training pipeline for QA models
+   a. Pretraining foundation model from scratch to accomodate custom tokens/language
+   b. Training and evaluating custom QA module
+3. Serving QA system and interval update scraping systems
+   Here's why:
 
 - Your time should be focused on creating something amazing. A project that solves a problem and helps others
 - You shouldn't be doing the same tasks over and over like creating a README from scratch
