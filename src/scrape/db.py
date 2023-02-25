@@ -27,6 +27,8 @@ class Raw_Data(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    news_creation_date = mapped_column(Text)
     content: Mapped[str] = mapped_column(Text)
     remarks: Mapped[str] = mapped_column(Text)
     created_at = mapped_column(DateTime, default=func.now())
@@ -38,14 +40,16 @@ if __name__ == "__main__":
     )
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        # spongebob = Raw_Data(
-        #     source="malaysiakini",
-        #     content="Spongebob Squarepants",
-        #     remarks="spongebob@sqlalchemy.org",
-        # )
+        spongebob = Raw_Data(
+            source="malaysiakini",
+            content="Spongebob Squarepants",
+            remarks="spongebob@sqlalchemy.org",
+            title="title",
+            news_creation_date="aa",
+        )
 
-        # session.add_all([spongebob])
-        # session.commit()
+        session.add_all([spongebob])
+        session.commit()
         stmt = select(Raw_Data).where(Raw_Data.source.in_(["malaysiakini", "sandy"]))
         queryResults = session.scalars(stmt).all()
         print(queryResults)

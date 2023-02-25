@@ -6,11 +6,16 @@ import time
 from playwright.sync_api import Playwright, sync_playwright
 from tqdm import tqdm
 from src.scrape.db import Raw_Data
-from sqlalchemy import (
-    create_engine,
-    select,
-)
+from sqlalchemy import create_engine, select, desc
 from sqlalchemy.orm import Session
+from dataclasses import dataclass
+
+
+@dataclass
+class News_Raw_Data:
+    title: str = None
+    news_creation_time: str = None
+    content: str = None
 
 
 def scrape_malaysiakini(response_html):
@@ -32,16 +37,30 @@ def scrape_malaysiakini(response_html):
         "div",
         {"id": "full-content-container"},
     )
+    news_creation_div = soup.find(
+        "div",
+        {
+            "class": "flex flex-wrap items-center text-xs lg:text-sm opacity-90 font-normal"
+        },
+    )
     title_text = ""
     article_text = ""
+    news_creation_date_txt = ""
     if title_div is not None:
         title_text = title_div.get_text().replace("\n", "") + ". "
     if content_div is not None:
-        article_text = content_div.get_text().replace("\n", "") + ". "
+        article_text = content_div.get_text() + ". "
+    if news_creation_div is not None:
+        news_creation_date_txt = news_creation_div.get_text().replace("\n", "") + ". "
     if len(article_text) == 0:
         logger.warning("")
     logger.success(article_text)
-    return title_text + article_text
+
+    return News_Raw_Data(
+        title=title_text,
+        content=article_text,
+        news_creation_time=news_creation_date_txt,
+    )
     # logger.error(url)
 
 
@@ -52,38 +71,51 @@ def malaysiakini_scheduler():
     password = "Iamalextay96"
     engine = create_engine(
         "postgresql://postgres:Iamalextay96@192.168.1.3:5433/nlp",
-        echo=True,
+        echo=False,
         connect_args={"connect_timeout": 0},
     )
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(
-            "https://membership.malaysiakini.com/auth/local?redirectUrl=https://www.malaysiakini.com/&flow=normal&lang=en"
+    with Session(engine) as session:
+        last_news_query = (
+            select(Raw_Data)
+            .where(Raw_Data.source.contains("malaysiakini.com"))
+            .order_by(Raw_Data.source)
+            .limit(2)
         )
-        page.wait_for_timeout(1000)
+        last_news_result = session.scalars(last_news_query).all()
+        last_news_id = int(last_news_result[0].source.split("/")[-1])
+        newsId = last_news_id
+        logger.success(f"Starting from last news id : {newsId}")
 
-        username_selector = "#__next > div > div > div > div.jsx-2450343050.banner-card-content > form > div:nth-child(1) > input"
-        password_selector = "#__next > div > div > div > div.jsx-2450343050.banner-card-content > form > div:nth-child(2) > input"
-        enter_div = "#__next > div > div > div > div.jsx-2450343050.banner-card-content > form > div.jsx-1504941063.floating-action > div.jsx-2309431947.floating-button > button"
-        page.locator(username_selector).fill(username)
-        page.locator(password_selector).fill(password)
-        page.locator(enter_div).click()
-        page.wait_for_timeout(1000)
-        for i in tqdm(range(20000)):
-            targetUrl = template.replace("###", f"{newsId - i}")
-            page.goto(targetUrl)
-            full_txt = scrape_malaysiakini(page.content())
-            with Session(engine) as session:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(
+                "https://membership.malaysiakini.com/auth/local?redirectUrl=https://www.malaysiakini.com/&flow=normal&lang=en"
+            )
+            page.wait_for_timeout(1000)
+
+            username_selector = "#__next > div > div > div > div.jsx-2450343050.banner-card-content > form > div:nth-child(1) > input"
+            password_selector = "#__next > div > div > div > div.jsx-2450343050.banner-card-content > form > div:nth-child(2) > input"
+            enter_div = "#__next > div > div > div > div.jsx-2450343050.banner-card-content > form > div.jsx-1504941063.floating-action > div.jsx-2309431947.floating-button > button"
+            page.locator(username_selector).fill(username)
+            page.locator(password_selector).fill(password)
+            page.locator(enter_div).click()
+            page.wait_for_timeout(2000)
+            for i in tqdm(range(20000)):
+                targetUrl = template.replace("###", f"{newsId - i}")
+                page.goto(targetUrl)
+                parsed_news = scrape_malaysiakini(page.content())
                 newData = Raw_Data(
                     source=targetUrl,
-                    content=full_txt,
+                    content=parsed_news.content,
                     remarks="",
+                    title=parsed_news.title,
+                    news_creation_date=parsed_news.news_creation_time,
                 )
 
                 session.add_all([newData])
                 session.commit()
-            time.sleep(1)
+                time.sleep(0.5)
 
 
 if __name__ == "__main__":
